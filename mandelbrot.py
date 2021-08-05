@@ -4,8 +4,8 @@ from pygame.locals import *
 
 MinGain=100
 MaxGain=300
-MinZoom=pow(10,-11) #tiiiiiiny
-MaxZoom=0.001
+MinZoom=pow(10,-13) #tiiiiiiny
+MaxZoom=0.0001
 HuntTarget = 100
 
 def mandelPixel(x,y,gain,off_x=0,off_y=0):
@@ -44,6 +44,8 @@ class Mandelbrot:
         self.highest = 0
         self.lowest = 550
         while self.highest - self.lowest < HuntTarget:
+            self.highest = 0
+            self.lowest = 550
             self.zoom_offset_x = self.rng.uniform(-2,2)
             self.zoom_offset_y = self.rng.uniform(-2,2)
             self.zoom_pixel = self.rng.uniform(MinZoom,MaxZoom)
