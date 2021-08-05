@@ -144,5 +144,7 @@ if __name__ == "__main__":
     screen.blit(mandel.surface,(0,0))
     pygame.display.flip()
     pygame.image.save(mandel.surface,"{}.png".format(sys.argv[1]))
+    print("X {0} to {1}".format( mandel.zoom_offset_x,(x*mandel.zoom_pixel)+ mandel.zoom_offset_x))
+    print("Y {0} to {1}".format( mandel.zoom_offset_y,(y*mandel.zoom_pixel)+ mandel.zoom_offset_y))
     import time
     time.sleep(5)
