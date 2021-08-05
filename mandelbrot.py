@@ -141,5 +141,6 @@ if __name__ == "__main__":
     screen = pygame.display.set_mode((x,y))
     screen.blit(mandel.surface,(0,0))
     pygame.display.flip()
+    pygame.image.save(mandel.surface,"{}.png".format(sys.argv[1]))
     import time
     time.sleep(5)
