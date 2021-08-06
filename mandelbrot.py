@@ -5,8 +5,7 @@ from pygame.locals import *
 MinGain=100
 MaxGain=300
 MinZoom=pow(10,-13) #tiiiiiiny
-MaxZoom=0.0001
-HuntTarget = 100
+MaxZoom=0.001
 
 def mandelPixel(x,y,gain,off_x=0,off_y=0):
     if x > 2 or y > 2:
@@ -50,6 +49,7 @@ class Mandelbrot:
     def find(self,target=False):
         self.highest = 0
         self.lowest = 550
+        HuntTarget = 100
         attempts = 0
         while self.highest - self.lowest < HuntTarget:
             self.highest = 0
@@ -69,15 +69,24 @@ class Mandelbrot:
             attempts += 1
         print("found one with {0} range. {1} attempts".format(self.highest - self.lowest,attempts))
 
-    def findZoom(self,zoom):
+    def findZoom(self,frames,zoom_per_frame,samples=False):
+        HuntTarget = 100
         backup = (self.zoom_offset_x,self.zoom_offset_y,self.zoom_pixel)
         rangex = (self.zoom_offset_x,(self.width*self.zoom_pixel)+ self.zoom_offset_x)
         rangey = (self.zoom_offset_y,(self.height*self.zoom_pixel)+ self.zoom_offset_y)
-        
-        self.zoom_pixel = zoom
+        if samples:
+            self.calculate()
+            self.draw()
+            self.start_surface = self.surface.copy()
+                
+        for i in range(frames):
+            widthpix = self.zoom_pixel * (self.width-zoom_per_frame)
+            self.zoom_pixel = widthpix / self.width
+            
         
         self.highest = 0
         self.lowest = 550
+        attempts = 0
         while self.highest - self.lowest < HuntTarget:
             self.highest = 0
             self.lowest = 550
@@ -87,34 +96,46 @@ class Mandelbrot:
                 x = self.rng.randint(0,self.width)
                 y = self.rng.randint(0,self.height)
                 self.getPixel(x,y)
+            attempts += 1
+            if attempts > 100:
+                HuntTarget -= 1
+                attempts = 0
 
-        centrex = self.zoom_offset_x+(zoom*self.width/2)
-        centrey = self.zoom_offset_y+(zoom*self.height/2)
+        centrex = self.zoom_offset_x+(self.zoom_pixel*self.width/2)
+        centrey = self.zoom_offset_y+(self.zoom_pixel*self.height/2)
         retval = (self.zoom_offset_x,self.zoom_offset_y,self.zoom_pixel,centrex,centrey)
-        self.calculate()
-        self.draw()
-        pygame.image.save(self.surface,"{}-end.png".format(self.seed))
+        
+        if samples:
+            self.calculate()
+            self.draw()
+            self.end_surface = self.surface.copy()
+            self.zoom_pixel = backup[2]
+            self.zoom_offset_x = centrex-(self.zoom_pixel*self.width/2)
+            self.zoom_offset_y = centrey-(self.zoom_pixel*self.height/2) 
+            self.calculate()
+            self.draw()
+            self.start_surface = self.surface.copy()
         
         self.zoom_offset_x = backup[0]
         self.zoom_offset_y = backup[1]
         self.zoom_pixel = backup[2]
         return retval
 
+    def animationDryRun(self,frames,zoom_per_frame):
+        self.setup()
+        self.find()            
+        self.findZoom(frames,zoom_per_frame,True)
+
     def animateZoom(self,frames,zoom_per_frame):
         self.setup()
         self.find()
-        
-        endzoom = self.zoom_pixel
-        for i in range(frames):
-            widthpix = endzoom * (self.width-zoom_per_frame)
-            endzoom = widthpix / self.width
             
-        zoom_end = self.findZoom(endzoom)
+        zoom_end = self.findZoom(frames,zoom_per_frame)
         
         xdelta = ( zoom_end[0] - self.zoom_offset_x )/frames
         ydelta = ( zoom_end[1] - self.zoom_offset_y )/frames
         for i in range(frames):
-            print("frame {0} of {1}".format(i,frames))
+            print("frame {0} of {1}".format(i+1,frames))
             widthpix = self.zoom_pixel * (self.width-zoom_per_frame)
             self.zoom_pixel = widthpix / self.width
             
@@ -125,7 +146,8 @@ class Mandelbrot:
             self.draw()
             pygame.image.save(self.surface,"{0}_{1:04}.png".format(self.seed,i))
         import subprocess
-        subprocess.Popen(["ffmpeg","-i","{0}_%04d.png".format(self.seed),"{}.mp4".format(self.seed)]).wait()
+        subprocess.Popen(["ffmpeg","-i","{0}_%04d.png".format(self.seed),"-r","15","{}.mp4".format(self.seed)]).wait()
+        subprocess.Popen(["rm","{0}_*.png".format(self.seed)],shell=True).wait()
             
             
     def getPixel(self,x,y):
@@ -207,19 +229,33 @@ class Mandelbrot:
 
 
 
+
+def Animation(seed,x,y,frames,speed):
+    mandel = Mandelbrot(x,y,seed)
+    mandel.animationDryRun(frames,speed)
+    
+    screen = pygame.display.set_mode((x,(y*2)))
+
+    screen.blit(mandel.start_surface,(0,0))
+    screen.blit(mandel.end_surface,(0,y))
+    pygame.display.flip()
+    import time
+    time.sleep(6)
+    mandel.animateZoom(frames,speed)
+
+def Picture(seed,x,y):
+    mandel = Mandelbrot(x,y,seed)
+    screen = pygame.display.set_mode((x,y))
+    mandel.makePicture()
+    screen.blit(mandel.surface,(0,0))
+    pygame.display.flip()
+    print("X {0} to {1}".format( mandel.zoom_offset_x,(x*mandel.zoom_pixel)+ mandel.zoom_offset_x))
+    print("Y {0} to {1}".format( mandel.zoom_offset_y,(y*mandel.zoom_pixel)+ mandel.zoom_offset_y))
+    import time
+    time.sleep(5)
+        
 import sys
 if __name__ == "__main__":
     print(sys.argv[1])
-    x = 500
-    y = 320
-    mandel = Mandelbrot(x,y,sys.argv[1])
-    #screen = pygame.display.set_mode((x,y))
-    #mandel.makePicture()
-    #screen.blit(mandel.surface,(0,0))
-    #pygame.display.flip()
-    #print("X {0} to {1}".format( mandel.zoom_offset_x,(x*mandel.zoom_pixel)+ mandel.zoom_offset_x))
-    #print("Y {0} to {1}".format( mandel.zoom_offset_y,(y*mandel.zoom_pixel)+ mandel.zoom_offset_y))
-    #import time
-    #time.sleep(5)
-    mandel.animateZoom(200,8)
+    Animation(sys.argv[1],500,320,300,15)
     
