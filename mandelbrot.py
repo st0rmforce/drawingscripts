@@ -21,40 +21,113 @@ def mandelPixel(x,y,gain,off_x=0,off_y=0):
 
 
 class Mandelbrot:
-    def __init__(self,width,height,seed=False,rng=random.Random()):
+    def __init__(self,width,height,seed=False):
         if seed:
-            self.rng = random.Random()
-            self.rng.seed(seed)
+            self.seed = seed
         else:
-            self.rng = rng
+            self.seed = str(random.randint(1,999999999999)) # if no seed was given, use a random number
         
         self.width = width
         self.height = height
-        self.surface = pygame.Surface([width,height])
+        self.setup()
+
+    def setup(self):
+        self.rng = random.Random()          #create random number generator for this instance
+        self.rng.seed(self.seed) # and initialise it with the seed
+        self.surface = pygame.Surface([self.width,self.height])
 
         self.gain = self.rng.randint(MinGain,MaxGain)
         self.colour_mode = self.rng.randint(0,5)
         self.hue_offset = self.rng.randint(0,359)
-        
+
+    def makePicture(self):
+        self.setup()
         self.find()
         self.calculate()
         self.draw()
+        pygame.image.save(self.surface,"{}.png".format(self.seed))
 
-    def find(self):
+    def find(self,target=False):
+        self.highest = 0
+        self.lowest = 550
+        attempts = 0
+        while self.highest - self.lowest < HuntTarget:
+            self.highest = 0
+            self.lowest = 550
+            if not target:
+                self.zoom_offset_x = self.rng.uniform(-2,2)
+                self.zoom_offset_y = self.rng.uniform(-2,2)
+                self.zoom_pixel = self.rng.uniform(MinZoom,MaxZoom)
+            else:
+                self.zoom_offset_x = self.rng.uniform(target[0],target[1])
+                self.zoom_offset_y = self.rng.uniform(target[2],target[3])
+                
+            for points in range(200): #Pick 100 random points and check how varied they are
+                x = self.rng.randint(0,self.width)
+                y = self.rng.randint(0,self.height)
+                self.getPixel(x,y)
+            attempts += 1
+        print("found one with {0} range. {1} attempts".format(self.highest - self.lowest,attempts))
+
+    def findZoom(self,zoom):
+        backup = (self.zoom_offset_x,self.zoom_offset_y,self.zoom_pixel)
+        rangex = (self.zoom_offset_x,(self.width*self.zoom_pixel)+ self.zoom_offset_x)
+        rangey = (self.zoom_offset_y,(self.height*self.zoom_pixel)+ self.zoom_offset_y)
+        
+        self.zoom_pixel = zoom
+        
         self.highest = 0
         self.lowest = 550
         while self.highest - self.lowest < HuntTarget:
             self.highest = 0
             self.lowest = 550
-            self.zoom_offset_x = self.rng.uniform(-2,2)
-            self.zoom_offset_y = self.rng.uniform(-2,2)
-            self.zoom_pixel = self.rng.uniform(MinZoom,MaxZoom)
-            for points in range(200): #Pick 100 random points and check how varied they are
+            self.zoom_offset_x = self.rng.uniform(rangex[0],rangex[1])
+            self.zoom_offset_y = self.rng.uniform(rangey[0],rangey[1])
+            for points in range(100): #Pick 100 random points and check how varied they are
                 x = self.rng.randint(0,self.width)
                 y = self.rng.randint(0,self.height)
                 self.getPixel(x,y)
-        print("found one with {} range".format(self.highest - self.lowest))
 
+        centrex = self.zoom_offset_x+(zoom*self.width/2)
+        centrey = self.zoom_offset_y+(zoom*self.height/2)
+        retval = (self.zoom_offset_x,self.zoom_offset_y,self.zoom_pixel,centrex,centrey)
+        self.calculate()
+        self.draw()
+        pygame.image.save(self.surface,"{}-end.png".format(self.seed))
+        
+        self.zoom_offset_x = backup[0]
+        self.zoom_offset_y = backup[1]
+        self.zoom_pixel = backup[2]
+        return retval
+
+    def animateZoom(self,frames,zoom_per_frame):
+        self.setup()
+        self.find()
+        
+        endzoom = self.zoom_pixel
+        for i in range(frames):
+            widthpix = endzoom * (self.width-zoom_per_frame)
+            endzoom = widthpix / self.width
+            
+        zoom_end = self.findZoom(endzoom)
+        
+        xdelta = ( zoom_end[0] - self.zoom_offset_x )/frames
+        ydelta = ( zoom_end[1] - self.zoom_offset_y )/frames
+        for i in range(frames):
+            print("frame {0} of {1}".format(i,frames))
+            widthpix = self.zoom_pixel * (self.width-zoom_per_frame)
+            self.zoom_pixel = widthpix / self.width
+            
+            self.zoom_offset_x = zoom_end[3]-(self.zoom_pixel*self.width/2)
+            self.zoom_offset_y = zoom_end[4]-(self.zoom_pixel*self.height/2)            
+            
+            self.calculate()
+            self.draw()
+            pygame.image.save(self.surface,"{0}_{1:04}.png".format(self.seed,i))
+        import subprocess
+        subprocess.Popen(["ffmpeg","-i","{0}_%04d.png".format(self.seed),"{}.mp4".format(self.seed)]).wait()
+            
+            
     def getPixel(self,x,y):
         pix_x = (x*self.zoom_pixel)+ self.zoom_offset_x
         pix_y = (y*self.zoom_pixel)+ self.zoom_offset_y
@@ -137,14 +210,16 @@ class Mandelbrot:
 import sys
 if __name__ == "__main__":
     print(sys.argv[1])
-    x = 1920
-    y = 1080
+    x = 500
+    y = 320
     mandel = Mandelbrot(x,y,sys.argv[1])
-    screen = pygame.display.set_mode((x,y))
-    screen.blit(mandel.surface,(0,0))
-    pygame.display.flip()
-    pygame.image.save(mandel.surface,"{}.png".format(sys.argv[1]))
-    print("X {0} to {1}".format( mandel.zoom_offset_x,(x*mandel.zoom_pixel)+ mandel.zoom_offset_x))
-    print("Y {0} to {1}".format( mandel.zoom_offset_y,(y*mandel.zoom_pixel)+ mandel.zoom_offset_y))
-    import time
-    time.sleep(5)
+    #screen = pygame.display.set_mode((x,y))
+    #mandel.makePicture()
+    #screen.blit(mandel.surface,(0,0))
+    #pygame.display.flip()
+    #print("X {0} to {1}".format( mandel.zoom_offset_x,(x*mandel.zoom_pixel)+ mandel.zoom_offset_x))
+    #print("Y {0} to {1}".format( mandel.zoom_offset_y,(y*mandel.zoom_pixel)+ mandel.zoom_offset_y))
+    #import time
+    #time.sleep(5)
+    mandel.animateZoom(200,8)
+    
